@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/mbp_guest/Desktop/Micromouse/software/main'
+relocations:     []
+...
