@@ -1,5 +1,6 @@
 #include <iostream>
 #include <queue>
+#include <vector>
 using namespace std;
 
 // Structure (Coordinates and Cell Values) and Enum (Direction) for mouse
@@ -20,7 +21,6 @@ struct Cell{
   Direction dir;
   bool blocked;
 };
-
 
 struct Maze{
   int distances[16][16];
@@ -48,34 +48,35 @@ struct Maze{
 //void updateSim();
 
 
-//Global Values
+// Global Values
 int MAX_COST = 255;
 int CELL_SIZE = 16;
-
 
 int main(){
   // Creating Maze Structure as Maze
   Maze maze1;
 
-  //Creating mouse and it's parameters
+  // Creating mouse and it's parameters
   Cell mouse;
-  mouse.pos = [0][0];
+  mouse.pos = [15][0];
   mouse.dir = NORTH;
 
+  // Queue, head,and tail initialization
+  queue<> 
   int head, tail = 0;
 
   // Initiallize Max Cost value for all cells, and Goal Cell values
   for(int i = 0; i < CELL_SIZE; i++){
     for(int j = 0; j < CELL_SIZE; j++){
       maze1.distances[i][j] = MAX_COST;
-      cout << maze1.distances[i][j] << " " << endl;
     };
-    cout << "\n";
   };
-
-  for(int i = 8; i < 10; i++){
-    for(int j = 8; j < 10; j++){
+  
+  for(int i = 7; i < 9; i++){
+    for(int j = 7; j < 9; j++){
       maze1.distances[i][j] = 0;
+
+      tail++;
     };
   };
 
@@ -131,7 +132,7 @@ Cell* getNeighborCell(){
 
 /*
 OLD TEST CODE
-//Testing enum Direction;
+// Testing enum Direction;
   int arr[4] = {NORTH, EAST, SOUTH, WEST};
 
   for(int i=0; i<4; i++){
@@ -139,5 +140,23 @@ OLD TEST CODE
   }
   
   return 0;
+
+// Testing Max Cost initialization for all cells
+// Initiallize Max Cost value for all cells, and Goal Cell values
+  for(int i = 0; i < CELL_SIZE; i++){
+    for(int j = 0; j < CELL_SIZE; j++){
+      maze1.distances[i][j] = MAX_COST;
+      cout << maze1.distances[i][j] << " " << endl;
+    };
+    cout << "\n";
+  };
+
+  for(int i = 8; i < 10; i++){
+    for(int j = 8; j < 10; j++){
+      maze1.distances[i][j] = 0;
+    };
+  };
+
+
   */
   
