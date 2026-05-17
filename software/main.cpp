@@ -180,13 +180,6 @@ int main(){
     // Update the simulator's display (if applicable)
     //updateSim(maze1, mouse, mazeSize);
     
-    // Cell check to ensure valid moves [TEST CODE FOR ONE TIME RUNS] 
-    /*if(bestCell.pos.x == mouse.pos.x && bestCell.pos.y == mouse.pos.y){
-      printf("Mouse is stuck. No lower-cost neighbor found.\n");
-      printf("Current Position: (%d, %d)\n", mouse.pos.x, mouse.pos.y);
-      printf("Current Distance: %d\n", maze1.distances[mouse.pos.x][mouse.pos.y]);
-      break; // Exit the loop if the mouse is stuck with no accessible neighbors
-    }*/
 
   }
 
