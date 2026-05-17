@@ -84,10 +84,7 @@ int main(){
   mouse.dir = NORTH;              // Starting Direction, facing North
   mouse.blocked = false;          // No blocks at start 
 
-  Cell currentCell = mouse;        // Initialize current cell as mouse's starting position
-
   int moveCount = 0; // Counter for number of moves taken by the mouse
-  int maxMoves = 300; // Maximum number of moves to prevent infinite loops in case of errors
 
   // Maze Initialization [Distances and Walls]
   // Initiallize Max Cost value for all cells, and Goal Cell values
@@ -99,14 +96,14 @@ int main(){
   };
 
   //Adding boundary walls so mouse cannot go out of bounds
-  for(int i = 0; i < mazeSize; i++){             // Using CELL_SIZE=16 to set walls
+  for(int i = 0; i < mazeSize; i++){               // Using mazeSize to set walls
     maze1.cellWalls[i][0]  |= NORTH_WALL;          // South wall for bottom row
-    maze1.cellWalls[i][mazeSize-1] |= SOUTH_WALL; // North wall for top row
+    maze1.cellWalls[i][mazeSize-1] |= SOUTH_WALL;  // North wall for top row
     maze1.cellWalls[0][i]  |= WEST_WALL;           // West wall for left column
-    maze1.cellWalls[mazeSize-1][i] |= EAST_WALL;  // East wall for right column
+    maze1.cellWalls[mazeSize-1][i] |= EAST_WALL;   // East wall for right column
   };
 
-  // Test to check if walls are set correctly
+  // Test code to check if walls are set correctly
   if(maze1.cellWalls[0][0] == 0b1001 && maze1.cellWalls[0][15] == 0b0011 && maze1.cellWalls[15][0] == 0b1100 && maze1.cellWalls[15][15] == 0b0110){
     printf("Walls initialized correctly\n\n");
   } else {
@@ -121,21 +118,24 @@ int main(){
   // -------------------------------------------------------------------------------
   // Queue, head,and tail initialization
   queue<Coord> floodQueue; // Queue for floodfill algorithm
-  int head, tail = 0;
+  int head = 0; int tail = 0;
 
   //Initialize Goal Cell, Set Goal Cell values, add them to queue
   setGoalCell(mazeSize, tail, maze1, goalCells, floodQueue);
 
   //FloodFill Algo main loop
   // STILL WORK IN PROGRESS, NEED TO ADD MOUSE MOVEMENT AND WALL SENSING, ALSO NEED TO CHECK FOR WALLS IN EACH DIRECTION
-  while(!floodQueue.empty() && moveCount < maxMoves){ // Loop until queue is empty or max moves reached
+  while(tail - head > 0){ // Loop until queue is empty
     
-    // Create a Cell structure for the current cell being processed in the floodfill algorithm
-    Cell floodCell = currentCell; 
-
     // Check if mouse has reached the goal cell
     bool reached_goal = false;
-    
+    if(reached_goal){
+      printf("Mouse has reached the goal cell!\n");
+      printf("Final Position: (%d, %d)\n", mouse.pos.x, mouse.pos.y);
+      printf("Total Moves: %d\n", moveCount);
+      break; // Exit the loop if the goal is reached
+    }
+
     // Check if the mouse's current position matches any of the goal cell coordinates
     for(Coord goal : goalCells){
       if(mouse.pos.x == goal.x && mouse.pos.y == goal.y){
@@ -144,47 +144,29 @@ int main(){
       }
     }
 
-    if(reached_goal){
-      printf("Mouse has reached the goal cell!\n");
-      printf("Final Position: (%d, %d)\n", mouse.pos.x, mouse.pos.y);
-      printf("Total Moves: %d\n", moveCount);
-      break; // Exit the loop if the goal is reached
-    }
-
-    Coord currentCell = floodQueue.front(); // Dequeue the front cell
-    floodQueue.pop();                       // Increment head (included for clarity)
+    // Get the front cell from the queue
+    Coord currentCell = floodQueue.front();
     
-    int newCost = maze1.distances[currentCell.x][currentCell.y] + 1; // Calculate new cost for neighboring cells
+    int newCost = maze1.distances[mouse.pos.x][mouse.pos.y] + 1; // Calculate new cost for neighboring cells
     
     // Get neighboring cells (assuming direction doesn't matter for floodfill)
-    Cell* neighbors = getNeighborCell(maze1, floodCell, floodCell.dir , mazeSize); 
+    Cell* neighborCell = getNeighborCell(maze1, mouse, mouse.dir , mazeSize); 
 
     // Check each neighbor and update distances if a shorter path is found
     for(int dir = 0; dir < 4; dir++){
-      
-      Cell neighbor = neighbors[dir];
-      if(!neighbor.blocked){ // Only consider accessible cells
+      if(!neighborCell[dir].blocked){ // Only consider accessible cells
 
-        if(newCost < maze1.distances[neighbor.pos.x][neighbor.pos.y]){ // Update distance if a shorter path is found
-          maze1.distances[neighbor.pos.x][neighbor.pos.y] = newCost; // Update distance to goal for the neighbor cell
-          floodQueue.push(neighbor.pos); // Enqueue the neighbor cell for further exploration
-          tail++; // Increment tail for each new cell added to the queue
+        if(newCost < maze1.distances[neighborCell[dir].pos.x][neighborCell[dir].pos.y]){ // Update distance if a shorter path is found
+          maze1.distances[neighborCell[dir].pos.x][neighborCell[dir].pos.y] = newCost; // Update distance to goal for the neighbor cell
+          floodQueue.push(neighborCell[dir].pos);  // Enqueue the neighbor cell for further exploration
+          tail++;                         // Increment tail for each new cell added to the queue
         }
 
       }
-
     }
 
     // Pick the best cell for the mouse to move to based on the updated distances
     Cell bestCell = getBestCell(maze1, mouse, mazeSize); // Get the best accessible cell for the mouse to move to
-
-    // Cell check to ensure valid moves [TEST CODE FOR ONE TIME RUNS]
-    if(bestCell.pos.x == mouse.pos.x && bestCell.pos.y == mouse.pos.y){
-      printf("Mouse is stuck. No lower-cost neighbor found.\n");
-      printf("Current Position: (%d, %d)\n", mouse.pos.x, mouse.pos.y);
-      printf("Current Distance: %d\n", maze1.distances[mouse.pos.x][mouse.pos.y]);
-      break; // Exit the loop if the mouse is stuck with no accessible neighbors
-    }
 
     // Rotate the mouse to face the best cell's direction
     rotate(mouse, bestCell.dir);
@@ -197,11 +179,18 @@ int main(){
 
     // Update the simulator's display (if applicable)
     //updateSim(maze1, mouse, mazeSize);
-  
+    
+    // Cell check to ensure valid moves [TEST CODE FOR ONE TIME RUNS] 
+    /*if(bestCell.pos.x == mouse.pos.x && bestCell.pos.y == mouse.pos.y){
+      printf("Mouse is stuck. No lower-cost neighbor found.\n");
+      printf("Current Position: (%d, %d)\n", mouse.pos.x, mouse.pos.y);
+      printf("Current Distance: %d\n", maze1.distances[mouse.pos.x][mouse.pos.y]);
+      break; // Exit the loop if the mouse is stuck with no accessible neighbors
+    }*/
+
   }
-  
-  return 0;
-  
+
+  return 1;
 
 }
 
@@ -231,10 +220,11 @@ void setGoalCell(int size, int &tail, Maze& maze, vector<Coord>& goalCells, queu
       printf("Tail Size: %d\n\n", tail);
     break;
 
-      default:
-        printf("Invalid maze size. Please use SIM_SIZE (5) or COMP_SIZE (16).\n");
-      break;
-    }
+    default:
+      printf("Invalid maze size. Please use SIM_SIZE (5) or COMP_SIZE (16).\n");
+    break;
+  }
+
 };
 
 // Differentiate between accessible cells and cells blocked by walls
