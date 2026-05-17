@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <queue>
 #include <vector>
+#include "API.h"
 using namespace std;
 
 // Structure (Coordinates and Cell Values) and Enum (Direction) for mouse
