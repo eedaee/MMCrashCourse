@@ -1,176 +1,139 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "API.h"
+#include <cstdlib>
+#include <iostream>
 
-#define BUFFER_SIZE 32
+int API::mazeWidth() {
+    std::cout << "mazeWidth" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return atoi(response.c_str());
+}
 
-// API Function Implementations
-int getInteger(char* command) {
-    printf("%s\n", command);     // Send command to simulator
-    fflush(stdout);              // Ensure command is sent immediately
-    char response[BUFFER_SIZE];
-    if (fgets(response, BUFFER_SIZE, stdin) != NULL) {  // Read response from simulator
-        return atoi(response);                          // Convert response to integer and return
+int API::mazeHeight() {
+    std::cout << "mazeHeight" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return atoi(response.c_str());
+}
+
+bool API::wallFront() {
+    std::cout << "wallFront" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return response == "true";
+}
+
+bool API::wallRight() {
+    std::cout << "wallRight" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return response == "true";
+}
+
+bool API::wallLeft() {
+    std::cout << "wallLeft" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return response == "true";
+}
+
+void API::moveForward(int distance) {
+std::cout << "moveForward ";
+// Don't print distance argument unless explicitly specified, for
+// backwards compatibility with older versions of the simulator
+    if (distance != 1) {
+        std::cout << distance;
     }
-    return -1;                                          // Return -1 if there was an error reading the response
-}
-
-int getBoolean(char* command) {
-    printf("%s\n", command);     // Send command to simulator
-    fflush(stdout);              // Ensure command is sent immediately  
-    char response[BUFFER_SIZE];
-    if (fgets(response, BUFFER_SIZE, stdin) != NULL) {         // Read response from simulator
-        int value = (strcmp(response, "true\n") == 0) ? 1 : 0; // Convert "true"/"false" to 1/0
-        return value;                                          // Return bool as an integer
+    std::cout << std::endl;
+    std::string response;
+    std::cin >> response;
+    if (response != "ack") {
+        std::cerr << response << std::endl;
+        throw;
     }
-    return -1;                                                 // Return -1 if there was an error reading the response
 }
 
-int getAck(char* command) {
-    printf("%s\n", command);     // Send command to simulator
-    fflush(stdout);              // Ensure command is sent immediately
-    char response[BUFFER_SIZE];
-    if (fgets(response, BUFFER_SIZE, stdin) != NULL) {  // Read response from simulator
-        int success = (strcmp(response, "ack\n") == 0); // Check if response is "ack" 
-        return success;                                 // Return 1 if successful, 0 otherwise
+void API::moveForwardHalf(int numHalfSteps) {
+    std::cout << "moveForwardHalf ";
+    if (numHalfSteps != 1) {
+        std::cout << numHalfSteps;
     }
-    return -1;                                          // Return -1 if there was an error reading the response
+    std::cerr << "getting here" << std::endl;
+    std::cout << std::endl;
+    std::string response;
+    std::cin >> response;
+    std::cerr << response << "hold on" << std::endl;
+    if (response != "ack") {
+        std::cerr << response << std::endl;
+        throw;
+    }
 }
 
-//-------------------------------- Additional Helper Functions for Simulator Communication --------------------------------
-// Maze Dimension Functions
-int mazeWidth(){
-    return getInteger("mazeWidth");
+void API::turnRight() {
+    std::cout << "turnRight" << std::endl;
+    std::string ack;
+    std::cin >> ack;
 }
 
-int mazeHeight(){
-    return getInteger("mazeHeight");
+void API::turnLeft() {
+    std::cout << "turnLeft" << std::endl;
+    std::string ack;
+    std::cin >> ack;
 }
 
-
-// Wall Sensing Functions
-bool wallFront(){
-    return getBoolean("wallFront");
+void API::turnRight45(){
+    std::cout << "turnRight45" << std::endl;
+    std::string ack;
+    std::cin >> ack;
 }
 
-bool wallRight(){
-    return getBoolean("wallRight");
+void API::turnLeft45(){
+    std::cout << "turnLeft45" << std::endl;
+    std::string ack;
+    std::cin >> ack;
 }
 
-bool wallLeft(){
-    return getBoolean("wallLeft");
+void API::setWall(int x, int y, char direction) {
+    std::cout << "setWall " << x << " " << y << " " << direction << std::endl;
 }
 
-bool wallBack(){
-    return getBoolean("wallBack");
+void API::clearWall(int x, int y, char direction) {
+    std::cout << "clearWall " << x << " " << y << " " << direction << std::endl;
 }
 
-
-// Action Functions
-int moveForward(){
-    return getAck("moveForward");
+void API::setColor(int x, int y, char color) {
+    std::cout << "setColor " << x << " " << y << " " << color << std::endl;
 }
 
-void turnRight(){
-    getAck("turnRight");
+void API::clearColor(int x, int y) {
+    std::cout << "clearColor " << x << " " << y << std::endl;
 }
 
-void turnLeft(){
-    getAck("turnLeft");
+void API::clearAllColor() {
+    std::cout << "clearAllColor" << std::endl;
 }
 
-// Maze Configuration Functions
-void setWall(int x, int y, char direction){
-    printf("setWall %d %d %c\n", x, y, direction);
-    fflush(stdout);
+void API::setText(int x, int y, const std::string& text) {
+    std::cout << "setText " << x << " " << y << " " << text << std::endl;
 }
 
-void clearWall(int x, int y, char direction){
-    printf("clearWall %d %d %c\n", x, y, direction);
-    fflush(stdout);
+void API::clearText(int x, int y) {
+    std::cout << "clearText " << x << " " << y << std::endl;
 }
 
-// Cell Display Functions
-void setColor(int x, int y, char color){
-    printf("setColor %d %d %c\n", x, y, color);
-    fflush(stdout);
+void API::clearAllText() {
+    std::cout << "clearAllText" << std::endl;
 }
 
-void clearColor(int x, int y){
-    printf("clearColor %d %d\n", x, y);
-    fflush(stdout);
+bool API::wasReset() {
+    std::cout << "wasReset" << std::endl;
+    std::string response;
+    std::cin >> response;
+    return response == "true";
 }
 
-void clearAllColor(){
-    printf("clearAllColor\n");
-    fflush(stdout);
+void API::ackReset() {
+    std::cout << "ackReset" << std::endl;
+    std::string ack;
+    std::cin >> ack;
 }
-
-// Text Display Functions
-void setText(int x, int y, char* str){
-    printf("setText %d %d %s\n", x, y, str);
-    fflush(stdout);
-}
-
-void clearText(int x, int y){
-    printf("clearText %d %d\n", x, y);
-    fflush(stdout);
-}
-
-void clearAllText(){
-    printf("clearAllText\n");
-    fflush(stdout);
-}
-
-// Reset Functions
-int wasReset(){
-    return getBoolean("wasReset");
-}
-
-void ackReset(){
-    getAck("ackReset");
-}
-
-// Debug Function
-void debug_log(char* text){
-    fprintf(stderr, "debug_log %s\n", text);
-    fflush(stderr);
-}
-
-/*
-Summary of Maze Functions
-
-int mazeWidth();
-int mazeHeight();
-
-bool wallFront(int numHalfSteps = 1);
-bool wallRight(int numHalfSteps = 1);
-bool wallLeft(int numHalfSteps = 1);
-bool wallBack(int numHalfSteps = 1);
-
-// Both of these commands can result in "crash"
-void moveForward(int distance = 1);
-void moveForwardHalf(int numHalfSteps = 1);
-
-void turnRight();
-void turnLeft();
-void turnRight45();
-void turnLeft45();
-
-void setWall(int x, int y, char direction);
-void clearWall(int x, int y, char direction);
-
-void setColor(int x, int y, char color);
-void clearColor(int x, int y);
-void clearAllColor();
-
-void setText(int x, int y, string text);
-void clearText(int x, int y);
-void clearAllText();
-
-bool wasReset();
-void ackReset();
-
-int/float getStat(string stat);
-
-*/

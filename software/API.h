@@ -1,29 +1,37 @@
 #pragma once
 
-int mazeWidth();
-int mazeHeight();
+#include <string>
 
-bool wallFront();
-bool wallRight();
-bool wallLeft();
-bool wallBack();
+class API {
 
-int moveForward();  // Returns 0 if crash, else returns 1
-void turnRight();
-void turnLeft();
+public:
 
-void setWall(int x, int y, char direction);
-void clearWall(int x, int y, char direction);
+  static int mazeWidth();
+  static int mazeHeight();
 
-void setColor(int x, int y, char color);
-void clearColor(int x, int y);
-void clearAllColor();
+  static bool wallFront();
+  static bool wallRight();
+  static bool wallLeft();
 
-void setText(int x, int y, char* str);
-void clearText(int x, int y);
-void clearAllText();
+  static void moveForward(int distance = 1);
+  static void moveForwardHalf(int numHalfSteps = 1);
+  static void turnRight();
+  static void turnLeft();
+  static void turnRight45();
+  static void turnLeft45();
 
-int wasReset();
-void ackReset();
+  static void setWall(int x, int y, char direction);
+  static void clearWall(int x, int y, char direction);
 
-void debug_log(char* text);
+  static void setColor(int x, int y, char color);
+  static void clearColor(int x, int y);
+  static void clearAllColor();
+
+  static void setText(int x, int y, const std::string& text);
+  static void clearText(int x, int y);
+  static void clearAllText();
+
+  static bool wasReset();
+  static void ackReset();
+
+};
