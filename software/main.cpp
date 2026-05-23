@@ -1,15 +1,27 @@
 #include <cstdio>
 #include <iostream>
-#include <iomanip>
+#include <climits>
 #include <queue>
 #include <vector>
+#include <thread>
+#include <chrono>
 #include "API.h"
+
+#define COMP_SIZE 16
+#define SIM_SIZE  5
+#define MAX_COST  255
+
 using namespace std;
 
+// !!! __CHANGE THIS VARIABLE__ to switch between 16x16 maze (COMP_SIZE) and 5x5 maze (SIM_SIZE)
+const int mazeSize = COMP_SIZE; 
+
+// Logging function for simulation print outputs
 void log (const string& text){
   cerr << text;
 }
 
+// -------------------------------  Data Structures  -------------------------------
 // Structure (Coordinates and Cell Values) and Enum (Direction) for mouse
 struct Coord{
   int x;
@@ -18,39 +30,33 @@ struct Coord{
 
 // Direction Enum for mouse orientation
 enum Direction {
-  NORTH, 
-  EAST, 
-  SOUTH, 
-  WEST
+  NORTH,   EAST, 
+  SOUTH,   WEST
 };
 
 // Function to get the name of a direction, or the initial of the direction (for API)
 const char* getDirectionName(Direction d) {
   switch (d) {
-    case NORTH: return "NORTH";
-    case EAST:  return "EAST";
-    case SOUTH: return "SOUTH";
-    case WEST:  return "WEST";
+    case NORTH: return "NORTH"; case EAST:  return "EAST";
+    case SOUTH: return "SOUTH"; case WEST:  return "WEST";
     default:    return "UNKNOWN";
   }
 }
 
 const char getDirInitial(int d) {
   switch (d) {
-    case NORTH: return 'n';
-    case EAST:  return 'e';
-    case SOUTH: return 's';
-    case WEST:  return 'w';
+    case NORTH: return 'n'; case EAST:  return 'e';
+    case SOUTH: return 's'; case WEST:  return 'w';
     default: return '?';
   }
 }
 
-const int NORTH_WALL = 0b1000;
-const int EAST_WALL  = 0b0100;
-const int SOUTH_WALL = 0b0010;
-const int WEST_WALL  = 0b0001;
+enum DirectionBitmask {
+  NORTH_WALL = 0b1000,     EAST_WALL  = 0b0100,
+  SOUTH_WALL = 0b0010,     WEST_WALL  = 0b0001
+};
 
-// Cell and Maze Structures
+// Cell and Maze Structures, and Queue for floodfill
 struct Cell{
   Coord pos;
   Direction dir;
@@ -58,178 +64,203 @@ struct Cell{
 };
 
 struct CellList {
-    int size;
-    Cell* cells;
+  int size;
+  Cell cells[4];
 };
 
 struct Maze{
-  int distances[16][16];
-  int cellWalls[16][16];
-  Coord* goalPos;
+  // mouse position and direction
+  int distance[mazeSize][mazeSize];
+  int cellWalls[mazeSize][mazeSize];
+  Coord mouse_pos;
+  Direction mouse_dir;
+  Coord goalPos;
+  bool mouse_blocked; // flag to indicate if the mouse is blocked by a wall in front of it
 };
 
-// Global Values
-const int MAX_COST  = 255;
-const int COMP_SIZE = 16;
-const int SIM_SIZE  = 5;
+struct Queue {
+  // Cell object array with max size
+  // Two int objects for head and tail
+  Cell cells[mazeSize * mazeSize];
+  int head;
+  int tail;
+};
 
-int mazeSize = COMP_SIZE; // !!!Using COMP_SIZE (16) for the maze size, can change to SIM_SIZE (5) for testing
 
-void setGoalCell(int size, int &tail, Maze& maze, vector<Coord>& goalCells, queue<Coord>& q);
+// ---------------------  Functions for Floodfill operations   --------------------
+void setGoalCell(int size, int tail, Maze& maze, vector<Coord>& goalCells, queue<Coord>& q);
+void getNeighborCells(const Maze* maze, Coord c, CellList& out);
 
-// Functions for Simulator / Real Mouse
-// Differentiate between accessible cells and cells blocked by walls
-Cell* getNeighborCell(Maze& maze, Cell& currentCell, Direction dir, int mazeSize);
-
-// Returns best accessible cell for the mouse to move to
-Cell getBestCell(Maze& maze, Cell& mouse, int mazeSize);
-
-// Direction functions to return direction after step rotation
-Direction cwStep(Direction currentDir);
-Direction ccwStep(Direction currentDir);
-
-//Sets a Certain cell position as target cell
-
-// Simulator Specific Functions
-void rotate(Cell& mouse, Direction targetDir);
-void updateMove(Cell& mouse, Cell bestCell);
-void scanWalls(Maze& maze, Cell mouse);
+void rotate(Maze* maze, Direction desired);
+bool canMoveForward(const Maze* maze);
+void updateMousePos(Coord* pos, Direction dir);
+bool safeForwardMove(Maze* maze);
+void scanWalls(Maze* maze);
 void updateSimulator(Maze maze);
+void floodFill(Maze* maze, queue<Coord>& q, bool to_start);
+
 
 // ------------------------------- Main Function -------------------------------
 
 int main(){
 
-  // Creating Maze Structure as Maze
-  Maze maze1;
-  vector<Coord> goalCells;  // Vector to store goal cell coordinates
+  // Creating Maze Structure as Maze, as well as mouse and it's parameters
+  Maze maze;
+  vector<Coord> goalCells;            // Vector to store goal cell coordinates
+  maze.mouse_pos = {0, 0};            // Starting Position, bottom-left corner of the maze
+  maze.mouse_dir = NORTH;             // Starting Direction, facing North 
+  Coord startPos = maze.mouse_pos;     // Store the starting position to return to later
 
-  // Creating mouse and it's parameters
-  Cell mouse;
-  mouse.pos = {0, 0};  // Starting Position, bottom-left corner of the maze
-  mouse.dir = NORTH;              // Starting Direction, facing North
-  mouse.blocked = false;          // No blocks at start 
+  maze.mouse_blocked = false;         // No blocks at start
+  bool returning = false;             // Flag to indicate if mouse is returning to start after reaching goal
+  bool speedrun = false;              // Flag to indicate if mouse is in speedrun phase after returning to start
 
   int moveCount = 0; // Counter for number of moves taken by the mouse 
   int moveMax = 300; // Max limit to exit FloodFill loop 
+
+  API::clearAllText(); // Clear any existing text in the simulator
 
   // Maze Initialization [Distances and Walls]
   // Initiallize Max Cost value for all cells, and Goal Cell values
   for(int i = 0; i < mazeSize; i++){
     for(int j = 0; j < mazeSize; j++){
-      maze1.distances[i][j] = MAX_COST; // Initialize all cells with Max Cost value (255)
-      maze1.cellWalls[i][j] = 0b0000; // No walls in any direction (N, E, S, W)
+      API::setText(i, j, to_string(255));         // Initialize all cells with Max Cost value (255)
+      for(int d = 0; d < 4; d++){
+        API::clearWall(i, j, getDirInitial(d));   // No walls in any direction (N, E, S, W)
+      }
     };
   };
 
+  // Sleep for a moment to allow the simulator to update with the initial cell values before setting boundary walls
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500)); 
+
   //Adding boundary walls so mouse cannot go out of bounds
   for(int i = 0; i < mazeSize; i++){               // Using mazeSize to set walls
-    //maze1.cellWalls[i][0]  |= NORTH_WALL;          // North wall for top row
+    //maze.cellWalls[i][0]  |= NORTH_WALL;          // North wall for top row
     API::setWall(i, mazeSize - 1, getDirInitial(NORTH));
-
-    //maze1.cellWalls[i][mazeSize-1] |= SOUTH_WALL;  // South wall for bottom row
+    //maze.cellWalls[i][mazeSize-1] |= SOUTH_WALL;  // South wall for bottom row
     API::setWall(i, 0, getDirInitial(SOUTH));
-
-    //maze1.cellWalls[0][i]  |= WEST_WALL;           // West wall for left column
+    //maze.cellWalls[0][i]  |= WEST_WALL;           // West wall for left column
     API::setWall(0, i, getDirInitial(WEST));
-
-    //maze1.cellWalls[mazeSize-1][i] |= EAST_WALL;   // East wall for right column
+    //maze.cellWalls[mazeSize-1][i] |= EAST_WALL;   // East wall for right column
     API::setWall(mazeSize - 1, i, getDirInitial(EAST));
   };
 
+  // Sleep for a moment to allow the simulator to update with the boundary walls before starting the algorithm
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500)); 
+
   // Print initial state of the mouse
   log("Starting Micromouse Floodfill Simulation\n");
-  log("Start Position: ("); cerr << mouse.pos.x << ", " << mouse.pos.y << ")\n";
-  log("Start Direction: "); cerr << getDirectionName(mouse.dir) << "\n\n";
+  log("Start Position: ("); cerr << maze.mouse_pos.x << ", " << maze.mouse_pos.y << ")\n";
+  log("Start Direction: "); cerr << getDirectionName(maze.mouse_dir) << "\n\n";
 
 
   // -------------------------------------------------------------------------------
   // Queue, head,and tail initialization
-  queue<Coord> floodQueue; // Queue for floodfill algorithm
-  int head = 0; int tail = 0;
+  queue<Coord> q; // Queue for floodfill algorithm
+  Queue queue; // Custom queue structure for floodfill algorithm
+
+  int head = 0; // Initialize head of the queue
+  int tail = 0; // Initialize tail of the queue
 
   //Initialize Goal Cell, Set Goal Cell values, add them to queue
-  setGoalCell(mazeSize, tail, maze1, goalCells, floodQueue);
+  setGoalCell(mazeSize, tail, maze, goalCells, q);
+  // Store center position for later speedrun phase
+  Coord centerPos = maze.goalPos; 
 
+  updateSimulator(maze); // Update the simulator with the initial state of the maze before starting the floodfill algorithm
 
-  // ----------------------- FloodFill Algo main loop -----------------------
-  // STILL WORK IN PROGRESS, NEED TO ADD MOUSE MOVEMENT AND WALL SENSING, ALSO NEED TO CHECK FOR WALLS IN EACH DIRECTION
-  while((tail - head > 0) || moveCount < moveMax){ // Loop until queue is empty
-    
-    // Check if mouse has reached the goal cell
-    bool reached_goal = false;
-    if(reached_goal){
-      log("Mouse has reached the goal cell!\n");
-      log("Final Position: ("); cerr <<  mouse.pos.x << ", " << mouse.pos.y << ")\n";
-      log("Total Moves: : ("); cerr <<  moveCount << ")\n";
-      break; // Exit the loop if the goal is reached
+  // // ----------------------- FloodFill Algo main loop -----------------------
+  while(moveCount++ < moveMax) {
+    // Check if queue is empty, if so, break out of loop
+    if (q.empty()) {
+      log("Queue is empty. No path to goal cell found.\n");
+      break;
     }
 
-    // Check if the mouse's current position matches any of the goal cell coordinates
-    for(Coord goal : goalCells){
-      if(mouse.pos.x == goal.x && mouse.pos.y == goal.y){
-        reached_goal = true;
+    floodFill(&maze, q, false); // Perform floodfill to explore the maze and find path to goal cell
+    updateSimulator(maze); // Update the simulator with the current state of the maze after floodfill
+    scanWalls(&maze); // Scan for walls and update the maze's internal representation
+
+    // Check if mouse has reached the goal cell
+    if (maze.mouse_pos.x == maze.goalPos.x && maze.mouse_pos.y == maze.goalPos.y) {
+      if(!returning && !speedrun){
+        API::setText(maze.mouse_pos.x, maze.mouse_pos.y, "GOAL");
+        returning = true; // Set flag to indicate mouse is now returning to start
+        maze.goalPos = startPos; // Update goal position to starting position for return trip
+        continue; // Continue to next iteration to start returning to start
+      }
+      else if(returning && !speedrun){
+        API::setText(maze.mouse_pos.x, maze.mouse_pos.y, "START");
+        returning = false;        // Clear returning flag
+        speedrun = true;          // Set speedrun flag to indicate mouse is now in speedrun phase
+        maze.goalPos = centerPos; // Update goal position to center for speedrun phase
+        continue; // Continue to next iteration to start speedrun to center
+      }
+      else if(speedrun && !returning){
+        API::setText(maze.mouse_pos.x, maze.mouse_pos.y, "SPEEDRUN INITIALIZED");
         break;
       }
     }
-
-    // Get the front cell from the queue
-    Coord currentCell = floodQueue.front();
-    floodQueue.pop();
     
-    int newCost = maze1.distances[mouse.pos.x][mouse.pos.y] + 1; // Calculate new cost for neighboring cells
+    // Choose neihbor cell with lowest distance to goal and move mouse towards it, if not blocked by a wall
+    CellList neighbors;
+    getNeighborCells(&maze, maze.mouse_pos, neighbors); // Get neighbors of the current cell using the getNeighborCells function
+
+    // Find the best neighbor cell with the lowest distance to the goal
+    int bestIdx = -1;
+    int bestDistance = maze.distance[maze.mouse_pos.y][maze.mouse_pos.x]; // Distance of current cell to goal
     
-    // Get neighboring cells (assuming direction doesn't matter for floodfill)
-    Cell* neighborCell = getNeighborCell(maze1, mouse, mouse.dir , mazeSize); 
+    for(int i = 0; i < neighbors.size; i++){
+      // Get coordinates of the neighbor cell
+      Coord npos = neighbors.cells[i].pos; 
 
-    // Check each neighbor and update distances if a shorter path is found
-    for(int dir = 0; dir < 4; dir++){
-      if(!neighborCell[dir].blocked){ // Only consider accessible cells
-
-        if(newCost < maze1.distances[neighborCell[dir].pos.x][neighborCell[dir].pos.y]){ // Update distance if a shorter path is found
-          maze1.distances[neighborCell[dir].pos.x][neighborCell[dir].pos.y] = newCost; // Update distance to goal for the neighbor cell
-          floodQueue.push(neighborCell[dir].pos);  // Enqueue the neighbor cell for further exploration
-          tail++;                         // Increment tail for each new cell added to the queue
+      // Skip out-of-bounds neighbors
+      if(npos.x < 0 || npos.x >= mazeSize || npos.y < 0 || npos.y >= mazeSize) continue;
+      // Get distance of neighbor cell to goal
+      int d = maze.distance[npos.y][npos.x]; 
+      // Check if the neighbor cell is blocked by a wall in the direction of the neighbor
+      if(!neighbors.cells[i].blocked){ // Only consider accessible cells
+        int neighborDistance = maze.distance[npos.y][npos.x]; // Get distance of neighbor cell to goal
+        if(d != -1 && neighborDistance < bestDistance){ // Update best cell if neighbor is closer to goal
+          bestDistance = neighborDistance;
+          bestIdx = i;
         }
-
       }
     }
 
-
-    // Scan Walls and update the simulator's display
-    scanWalls(maze1, mouse);
-    updateSimulator(maze1);
-
-    // Pick the best cell for the mouse to move to based on the updated distances
-    Cell bestCell = getBestCell(maze1, mouse, mazeSize); // Get the best accessible cell for the mouse to move to
-    
-    if(!mouse.blocked){
-      // Move the mouse to the best cell
-      updateMove(mouse, bestCell);
+    if(bestIdx == -1){
+      log("No accessible neighbors found. Mouse is blocked.\n");
+      break; // Exit loop if no accessible neighbors are found
     }
-    // else{
-    //   // Rotate the mouse to face the best cell's direction
-      
-    // }
-    rotate(mouse, bestCell.dir);
-    moveCount++;  
+
+    // Rotate mouse to face the best neighbor cell and move forward if not blocked
+    // Get the direction of the best neighbor cell
+    Direction desired = neighbors.cells[bestIdx].dir; 
+    rotate(&maze, desired); // Rotate mouse to face the best neighbor cell
+    if(!safeForwardMove(&maze)){ // Move forward if not blocked, otherwise log that mouse is blocked and exit loop
+      log("Mouse is blocked by a wall. Cannot move forward.\n");
+      API::setText(maze.mouse_pos.x, maze.mouse_pos.y, "ERR");
+      break;
+    }
+
+    // Update the simulator
+    updateSimulator(maze);
+
   }
 
-  return 1;
+  return 0;
 
 }
 
-
-
 // ------------------------------- ------------------------------- -------------------------------
-// Function Definitions
-void setGoalCell(int size, int &tail, Maze& maze, vector<Coord>& goalCells, queue<Coord>& q){
+// Maze Function Definitions
+void setGoalCell(int size, int tail, Maze& maze, vector<Coord>& goalCells, queue<Coord>& q) {
   switch(size){
-   
     case SIM_SIZE:
       goalCells = {{2,2}};                         // Single center square for 5x5 maze
       for (Coord goal : goalCells) {               // Set distance of goal cell to 0, print and add to queue
-        maze.distances[goal.x][goal.y] = 0;
+        maze.distance[goal.x][goal.y] = 0;
         //printf("Goal Cell: (%d, %d) = %d\n", goal.x, goal.y, maze.distances[goal.x][goal.y]);
         API::setText(goal.x, goal.y, "0");
         q.push(goal);
@@ -241,7 +272,7 @@ void setGoalCell(int size, int &tail, Maze& maze, vector<Coord>& goalCells, queu
     case COMP_SIZE:
       goalCells = {{7,7}, {7,8}, {8,7}, {8,8}};;  // Center 2x2 square for 16x16 maze
       for (Coord goal : goalCells) {               // Set distance of goal cell to 0, print and add to queue
-        maze.distances[goal.x][goal.y] = 0;
+        maze.distance[goal.x][goal.y] = 0;
         //printf("Goal Cells: (%d, %d) = %d\n", goal.x, goal.y, maze.distances[goal.x][goal.y]);
         API::setText(goal.x, goal.y, "0");
         q.push(goal);
@@ -257,64 +288,60 @@ void setGoalCell(int size, int &tail, Maze& maze, vector<Coord>& goalCells, queu
 
 };
 
-// Differentiate between accessible cells and cells blocked by walls
-CellList* getNeighborCells(Maze* maze, Coord c) { //to be called in a while loop within Floodfill when setting each cell
-  
-  return nullptr;
-};
+// Non-allocating neighbor enumerator: fills out CellList (caller-provided)
+void getNeighborCells(const Maze* maze, Coord c, CellList& out) {
+  out.size = 0;
 
-Cell* getNeighborCell(Maze& maze, Cell& currentCell, Direction dir, int mazeSize){
-  static Cell neighborCells[4]; // Static to return pointer to local variable
-  
-  // Directon vectors for N, E, S, W
-  // Assumes pos.x = row index and pos.y = column index, x increases downwards and y increases rightwards
-  int dx[4] = {0, 1, 0, -1};
-  int dy[4] = {1, 0, -1, 0};
+  //  check each direction for walls. If no wall, add to neighbor list with appropriate coordinates and direction.
+  for (int d = 0; d < 4; d++) {
 
-  int wallMask[4] = {NORTH_WALL, EAST_WALL, SOUTH_WALL, WEST_WALL};     // Wall masks for current cell
-  int oppWallMask[4] = {SOUTH_WALL, WEST_WALL, NORTH_WALL, EAST_WALL};  // Opposite walls for neighbor cell
+    int wall_mask = DirectionBitmask(d);
 
-  // Check each of the 4 directions (N, E, S, W) and determine if the neighbor cell is accessible or blocked by a wall
-  for(int dir = 0; dir < 4; dir++){
-    int newX = currentCell.pos.x + dx[dir]; // Calculate new x coordinate
-    int newY = currentCell.pos.y + dy[dir]; // Calculate new y coordinate
+    // guard bounds on source cell
+    if (c.x < 0 || c.x >= mazeSize || c.y < 0 || c.y >= mazeSize) continue;
+    if (!(maze->cellWalls[c.y][c.x] & wall_mask)) { // no wall in this direction
+      Cell neighbor;
+      neighbor.pos = c;
+      neighbor.dir = static_cast<Direction>(d);
+      // update neighbor position based on direction
+      if (d == NORTH)
+        neighbor.pos.y += 1;
+      else if (d == EAST)
+        neighbor.pos.x += 1;
+      else if (d == SOUTH)
+        neighbor.pos.y -= 1;
+      else if (d == WEST)
+        neighbor.pos.x -= 1;
 
-    neighborCells[dir].pos = {currentCell.pos.x, currentCell.pos.y}; // Initialize neighbor cell position as current cell position
-    neighborCells[dir].dir = static_cast<Direction>(dir);            // Set neighbor cell direction
-    neighborCells[dir].blocked = false;                              // Default to accessible, will update if accessible
+      // optionally skip out-of-bounds neighbor
+      if (neighbor.pos.x < 0 || neighbor.pos.x >= mazeSize || neighbor.pos.y < 0 || neighbor.pos.y >= mazeSize)
+        continue;
 
-    // Check if the new cell is within bounds and not blocked by a wall
-    if(newX < 0 || newX >= mazeSize || newY < 0 || newY >= mazeSize) { // Out of bounds
-      neighborCells[dir].blocked = true;                               // Mark as blocked
-    }
-    else if (maze.cellWalls[currentCell.pos.x][currentCell.pos.y] & wallMask[dir]) { // Blocked by a wall
-      neighborCells[dir].blocked = true;                                             // Mark as blocked
-    }
-    else if (maze.cellWalls[newX][newY] & oppWallMask[dir]) { // Blocked by a wall from the neighbor cell's perspective
-      neighborCells[dir].blocked = true;                      // Mark as blocked
-    }
-    else { // Accessible cell
-      neighborCells[dir].pos = {newX, newY}; // Set neighbor cell position
-      neighborCells[dir].blocked = false;     // Mark as accessible
+      out.cells[out.size++] = neighbor;
+
     }
   }
-
-  return neighborCells; // Default return value if no valid neighbor is found
-
-};
+}
 
 // Returns best accessible cell for the mouse to move to
-Cell getBestCell(Maze& maze, Cell& mouse, int mazeSize){
-  Cell* neighbors = getNeighborCell(maze, mouse, mouse.dir, mazeSize); // Get neighbor cells
+Cell getBestCell(Maze& maze, Cell& mouse, int mazeSize = mazeSize) {
+  
+  CellList neighbors;
 
-  Cell bestCell = mouse;                                       // Initialize best cell as current cell
-  int bestDistance = maze.distances[mouse.pos.x][mouse.pos.y]; // Distance of current cell to goal
+  getNeighborCells(&maze, mouse.pos, neighbors);
+
+  Cell bestCell = mouse;                                  // Initialize best cell as current cell
+  int bestDistance = maze.distance[mouse.pos.x][mouse.pos.y];  // Distance of current cell to goal
 
   // Check each neighbor cell and update best cell if it's closer to the goal
   for(int dir = 0; dir < 4; dir++){
-    Cell neighbor = neighbors[dir];
+    
+    // Check if the neighbor cell is accessible (not blocked by a wall)
+    Cell neighbor = neighbors.cells[dir];
+
     if(!neighbor.blocked){ // Only consider accessible cells
-      int neighborDistance = maze.distances[neighbor.pos.x][neighbor.pos.y]; // Get distance of neighbor cell to goal
+      
+      int neighborDistance = maze.distance[neighbor.pos.x][neighbor.pos.y]; // Get distance of neighbor cell to goal
     
       if(neighborDistance < bestDistance){ // Update best cell if it's closer to the goal
       bestCell = neighbor;
@@ -328,258 +355,178 @@ Cell getBestCell(Maze& maze, Cell& mouse, int mazeSize){
 
 };
 
-// Direction functions to return direction after step rotation
-Direction cwStep(Direction currentDir){
-  return static_cast<Direction>((currentDir + 1) % 4); // Rotate clockwise (N->E->S->W->N)
-};
-
-Direction ccwStep(Direction currentDir){
-  return static_cast<Direction>((currentDir + 3) % 4); // Rotate counterclockwise (N->W->S->E->N)
-};
-
 // Simulator Specific Functions
-void rotate(Cell& mouse, Direction targetDir) {
-  //int turnAmount = (targetDir - mouse.dir + 4) % 4; // Calculate the number of steps to turn
+void rotate(Maze* maze, Direction desired) {
   
-  switch(turnAmount) {
-    case 0:
-      break;
-    case 1:
-      API::turnRight();
-      mouse.dir = cwStep(mouse.dir);
-      log("Rotate Clockwise -> Facing "); cerr << getDirectionName(mouse.dir) << "\n";
-      break;
-    case 2:
-      API::turnRight(); API::turnRight();
-      mouse.dir = cwStep(mouse.dir);
-      mouse.dir = cwStep(mouse.dir);
-      log("Rotate Clockwise 2x -> Facing "); cerr << getDirectionName(mouse.dir) << "\n";
-      break;
-    case 3:
-      API::turnLeft();
-      mouse.dir = ccwStep(mouse.dir);
-      log("Rotate CounterClockwise -> Facing "); cerr << getDirectionName(mouse.dir) << "\n";
-      break;
+  int cur  = static_cast<int>(maze->mouse_dir);
+  int want = static_cast<int>(desired);
+  int diff = (want - cur + 4) % 4;
+
+  if (diff == 0) return; // No rotation needed
+  if (diff == 1) {
+    API::turnRight();
+    maze->mouse_dir = static_cast<Direction>(want);
+  } 
+  else if (diff == 2) {
+    // turn around: two rights
+    API::turnRight();
+    API::turnRight();
+    maze->mouse_dir = static_cast<Direction>(want);
+  } 
+  else if (diff == 3) {
+    API::turnLeft();
+    maze->mouse_dir = static_cast<Direction>(want);
+  }
+
+};
+
+bool canMoveForward(const Maze* maze) {
+  Coord cur = maze->mouse_pos;
+  Direction d = maze->mouse_dir;
+  
+  // if there's a wall in front according to the map OR out of bounds, don't try
+  if (cur.x < 0 || cur.x >= mazeSize || cur.y < 0 || cur.y >= mazeSize) return false;
+  if (maze->cellWalls[cur.y][cur.x] & DirectionBitmask(d)) return false;
+  
+  // compute target cell and check bounds
+  int tx = cur.x, ty = cur.y;
+  if (d == NORTH) ty += 1;
+  else if (d == SOUTH) ty -= 1;
+  else if (d == EAST) tx += 1;
+  else if (d == WEST) tx -= 1;
+
+  if (tx < 0 || tx >= mazeSize || ty < 0 || ty >= mazeSize) return false;
+  return true;
+
+}
+
+void updateMousePos(Coord* pos, Direction dir) {
+  // depending on the mouse direction, increment position by one
+  if (dir == NORTH)
+    pos->y += 1;
+  else if (dir == SOUTH)
+    pos->y -= 1;
+  else if (dir == EAST)
+    pos->x += 1;
+  else if (dir == WEST)
+    pos->x -= 1;
+}
+
+bool safeForwardMove(Maze* maze) {
+  if (!canMoveForward(maze)) return false;
+  API::moveForward(1);
+  updateMousePos(&maze->mouse_pos, maze->mouse_dir);
+  return true;
+}
+
+void scanWalls(Maze* maze) { // fill in code for changing value of the cell walls
+  Coord p = maze -> mouse_pos;
+  Direction md = maze -> mouse_dir;
+  
+  // helper to set wall at (x,y) in direction d and also set opposite wall in neighbor if inside bounds
+  auto setWallAt = [&](int x, int y, int d) {
+    if (x < 0 || x >= mazeSize || y < 0 || y >= mazeSize) return;
+    maze->cellWalls[y][x] |= DirectionBitmask(d);
+    // set opposite in neighbor
+    int nx = x, ny = y;
+    if (d == NORTH) ny += 1;
+    else if (d == EAST) nx += 1;
+    else if (d == SOUTH) ny -= 1;
+    else if (d == WEST) nx -= 1;
+    if (nx >= 0 && nx < mazeSize && ny >= 0 && ny < mazeSize) {
+        int opp = (d + 2) % 4;
+        maze->cellWalls[ny][nx] |= DirectionBitmask(opp);
     }
-}
+  };
 
-void updateMove(Cell& mouse, Cell bestCell) {
-  mouse.pos = bestCell.pos;
-
-  if(!mouse.blocked){
-    API::moveForward();
-    //depending on the mouse direction, increment position by one
-    if (mouse.dir == NORTH)
-      // increment in some direction
-      mouse.pos.y += 1;
-    if (mouse.dir == SOUTH)
-      // increment in some direction
-      mouse.pos.y -= 1;
-    if (mouse.dir == WEST)
-      // increment in some direction
-      mouse.pos.x -= 1;
-    if (mouse.dir == EAST)
-      // increment in some direction
-      mouse.pos.x += 1;
+  // check each direction for walls. If no wall, add to neighbor list with appropriate coordinates and direction.
+  if (API::wallFront()) {
+    int d = md; // front is current orientation
+    setWallAt(p.x, p.y, d);
+    log("Wall in Front. ");
   }
-  
-  log("To Cell: ("); cerr << mouse.pos.x << ", " << mouse.pos.y << "). ";
-  log("Dir: "); cerr << getDirectionName(mouse.dir) << ". \n";
-}
-
-
-// Maze functions
-void scanWalls(Maze& maze, Cell mouse) { // fill in code for changing value of the cell walls
-  int x = mouse.pos.x;
-  int y = mouse.pos.y;
-
-  int front = mouse.dir;
-  int right = (front + 1 ) % 4;
-  int left  = (front + 3 ) % 4;
-
-  log("@ coord: <"); cerr << x << ", " << y << ">: ";
-
-  switch(front){
-    case NORTH:
-      //Front facing North [RH -> East Wall & LH -> West Wall]
-      if (API::wallFront()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(front));
-        maze.cellWalls[x][y] |= NORTH_WALL;
-        mouse.blocked = true;
-        log("Wall in Front (North). ");
-        }
-      if (API::wallRight()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= EAST_WALL;
-        log("Wall to Right (East). ");
-        }
-      if (API::wallLeft()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= WEST_WALL;
-        log("Wall to Right (West). ");
-        }
-      log("\n");
-      break;
-    case EAST:
-      //Front facing EAST [RH -> South Wall & LH -> North Wall]
-      if (API::wallFront()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(front));
-        maze.cellWalls[x][y] |= EAST_WALL;
-        mouse.blocked = true;
-        log("Wall in Front (East). ");
-        }
-      if (API::wallRight()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= SOUTH_WALL;
-        log("Wall to Right (South). ");
-        }
-      if (API::wallLeft()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= NORTH_WALL;
-        log("Wall to Left (North). ");
-        }
-      log("\n");
-      break;
-    case SOUTH:
-      //Front facing SOUTH [RH -> West Wall & LH -> East Wall]
-      if (API::wallFront()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(front));
-        maze.cellWalls[x][y] |= SOUTH_WALL;
-        mouse.blocked = true;
-        log("Wall in Front (South). ");
-        }
-      if (API::wallRight()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= WEST_WALL;
-        log("Wall to Right (West). ");
-        }
-      if (API::wallLeft()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= EAST_WALL;
-        log("Wall to Left (East). ");
-        }
-        log("\n");
-      break;
-    case WEST:
-      //Front facing WEST [RH -> North Wall & LH -> South Wall]
-      if (API::wallFront()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(front));
-        maze.cellWalls[x][y] |= WEST_WALL;
-        mouse.blocked = true;
-        log("Wall in Front (West). ");
-        }
-      if (API::wallRight()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= NORTH_WALL;
-        log("Wall to Right (North). ");
-        }
-      if (API::wallLeft()) {
-        API::setWall(mouse.pos.x, mouse.pos.y, getDirInitial(right));
-        maze.cellWalls[x][y] |= SOUTH_WALL;
-        log("Wall to Left (South). ");
-        }
-      log("\n");
-      break;
-    default:
-      log("No walls detected");
-      break;
+  if (API::wallRight()) {
+    int d = (md + 1) % 4;
+    setWallAt(p.x, p.y, d);
+    log("Wall on Right. ");
   }
+  if (API::wallLeft()) {
+    int d = (md + 3) % 4;
+    setWallAt(p.x, p.y, d);
+    log("Wall on Left. ");
+  }
+  log("\n");
+
 }
 
 void updateSimulator(Maze maze) { // redraws the maze in simulator after each loop in main
-  for(int x = 0; x < mazeSize; x++){
-    for(int y = 0; y < mazeSize; y++){
-      if (maze.cellWalls[x][y] & NORTH_WALL)
-        // API set walls for some direction
-        API::setWall(x,y,'n');
-      if (maze.cellWalls[x][y] & EAST_WALL)
-        // API set walls for some direction
-        API::setWall(x,y,'e');
-      if (maze.cellWalls[x][y] & SOUTH_WALL)
-        // API set walls for some direction
-        API::setWall(x,y,'s');
-      if (maze.cellWalls[x][y] & WEST_WALL)
-        // API set walls for some direction
-        API::setWall(x,y,'w');
-    }
-  }
-}
+  // clear previous text so numbers don't pile up
+  API::clearAllText();
 
+  // Iterate through each cell in the maze and update the simulator display based on the current state of the maze
+  for (int x = 0; x < mazeSize; x++){
+    for (int y = 0; y < mazeSize; y++){
+      // if there's a wall in a direction according to the map, set it in the simulator
+      if (maze.cellWalls[y][x] & NORTH_WALL)
+        API::setWall(x, y, 'n');
+      if (maze.cellWalls[y][x] & EAST_WALL)
+        API::setWall(x, y, 'e');
+      if (maze.cellWalls[y][x] & SOUTH_WALL)
+        API::setWall(x, y, 's');
+      if (maze.cellWalls[y][x] & WEST_WALL)
+        API::setWall(x, y, 'w');
 
-void floodFill(Maze maze, Cell& mouse, bool to_start, queue<Coord>& q, int head, int tail) { // function to be called everytime you move into a new cell
-  
-  Coord currentCell = q.front();
-  
-  int newDist = maze.distances[mouse.pos.x][mouse.pos.y] + 1; // Calculate new cost for neighboring cells
+      // show distance number (blank for unknown / -1)
+      if (maze.distance[y][x] >= 0) {
+        API::setText(x, y, std::to_string(maze.distance[y][x]));
 
-  
-    
-}
-
-/*
-OLD TEST CODE
-// Testing enum Direction;
-  int arr[4] = {NORTH, EAST, SOUTH, WEST};
-
-  for(int i=0; i<4; i++){
-    printf("%d\n", arr[i]);
-  }
-  
-  return 0;
-
-// Testing Max Cost initialization for all cells
-// Initiallize Max Cost value for all cells, and Goal Cell values
-  for(int i = 0; i < CELL_SIZE; i++){
-    for(int j = 0; j < CELL_SIZE; j++){
-      maze1.distances[i][j] = MAX_COST;
-      printf("%d \n", maze1.distances[i][j]);
-    };
-    printf("\n");
-  };
-
-  for(int i = 8; i < 10; i++){
-    for(int j = 8; j < 10; j++){
-      maze1.distances[i][j] = 0;
-    };
-  };
-
-
-
-// while functions with real micromouse
-  while (!isGoalCell(mouse.pos)) {
-    senseWalls();
-    floodfill();
-    chooseBestNeighbor();
-    moveMouse();
-}
-
-  // , and add them to the queue
-  for(Coord goal : goalCells){
-    printf("Goal Cell: (%d, %d) = %d\n", goal.x, goal.y, maze1.distances[goal.x][goal.y]);
-    //q.push(goal);       // Enqueue goal cells
-    //tail++;            // Increment tail for each goal cell added
-    //printf("Tail Size: %d\n", tail);
-  }
-
-  // Print the distance grid
-  printf("Floodfill Distance Map:\n");
-  for(int i = 0; i < mazeSize; i++){
-    for(int j = 0; j < mazeSize; j++){
-      printf("%3d\t", maze1.distances[i][j]); // Print distance with tab spacing
-    };
-    printf("\n\n");
-  };
-  
-  // Test code to check if walls are set correctly
-  // if(maze1.cellWalls[0][0] == 0b1100 && maze1.cellWalls[0][15] == 0b0110 && maze1.cellWalls[15][0] == 0b1001 && maze1.cellWalls[15][15] == 0b0011){
-  //   log("Walls initialized correctly\n\n");
-  // } else {
-  //   log("Error setting walls.\n\n");
-  // }
-  
-  for(int i = 0; i < mazeSize; i++){
-      for(int j = 0; j < mazeSize; j++){
-        API::setText(i,j, to_string(i) );
       }
     }
-*/
+  }
+}
+
+void floodFill(Maze* maze, queue<Coord> q, bool to_start) { // BFS-based flood-fill
+  
+  // initialize distances to -1 (unvisited)
+  for (int y = 0; y < mazeSize; ++y)
+    for (int x = 0; x < mazeSize; ++x)
+      maze -> distance[y][x] = -1;
+
+  // determine starting point for flood-fill based on whether we're filling towards the start or the goal
+  Coord start = to_start ? maze -> mouse_pos : maze -> goalPos;
+  
+  //clear and receed the queue with the starting cell and set its distance to 0
+  while(!q.empty()) q.pop(); // Clear the queue
+
+  // seed the queue with the starting cell and set its distance to 0
+  if (start.x < 0 || start.x >= mazeSize || start.y < 0 || start.y >= mazeSize) return;
+  
+  maze -> distance[start.y][start.x] = 0;
+  q.push(start);
+
+  while (!q.empty()) {
+    // get the front cell from the queue
+    Coord cur = q.front();
+    q.pop();
+
+    // extract coordinates and current distance of mouse
+    int curDist = maze -> distance[cur.y][cur.x];
+
+    // get neighbors of the current cell using the getNeighborCells function
+    CellList neighbors;
+    getNeighborCells(maze, cur, neighbors);
+    
+    // for each neighbor, if it's unvisited and accessible, set distance and add to queue
+    for (int i = 0; i < neighbors.size; ++i) {
+      Coord npos = neighbors.cells[i].pos;
+      // bounds are already checked by getNeighborCells, but double-check
+      if (npos.x < 0 || npos.x >= mazeSize || npos.y < 0 || npos.y >= mazeSize)
+        continue;
+
+      if (maze->distance[npos.y][npos.x] == -1) {
+        maze->distance[npos.y][npos.x] = curDist + 1;
+        q.push(npos);
+      }
+    }
+  }
+}
