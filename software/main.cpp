@@ -49,7 +49,7 @@ int main(){
   vector<Coord> activeTargets; // Vector to store current targets based on phase (initially center goal(s))
 
   int moveCount = 0; // Counter for number of moves taken by the mouse 
-  int moveMax = 300; // Max limit to exit FloodFill loop 
+  int moveMax = 256; // Max limit to exit FloodFill loop 
 
   // After declaring Maze maze;
   memset(maze.cellWalls, 0, sizeof(maze.cellWalls));
@@ -147,6 +147,7 @@ int main(){
     // STEP 4: Check if mouse has reached ANY goal cell for the current phase, and if so, update to next phase and set new targets
     if(reachedPhaseTarget(phase, maze.mouse_pos, startPos, goalCells)) {
       updatePhase(phase);
+      moveCount = 0; // Reset moveCount to 0 to exit loop after phase completion (for now, can be adjusted later for multi-phase runs)
 
       API::setText(maze.mouse_pos.x, maze.mouse_pos.y, getPhaseName(phase));
 
