@@ -56,13 +56,6 @@ uint16_t dis_FR = 0;
 uint16_t dis_L = 0;
 uint16_t dis_R = 0;
 
-void Motors_Init(void);
-void Motors_Forward(uint16_t speed);
-void Motors_Backward(uint16_t speed);
-void Motors_Stop(void);
-void Motors_Brake(void);
-void Motors_TestSequence(void);
-void Motors_SetSpeed(int16_t left_speed, int16_t right_speed);
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
