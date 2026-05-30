@@ -1,24 +1,6 @@
-/*
- * motor_control.c
- *
- *  Created on: May 24, 2026
- *      Author: anbui
- */
-/* motor_control.c
- *
- * Basic STM32 HAL motor-control test file for Micromouse.
- *
- * Add this file to Core/Src in STM32CubeIDE.
- * Configure 2 PWM outputs and 4 GPIO direction outputs in CubeMX.
- */
-
 #include "main.h"
 #include "micromouse.h"
 #include <stdint.h>
-
-/* -------------------------------------------------------------------------- */
-/* USER CONFIG: edit these names to match your CubeMX labels in main.h          */
-/* -------------------------------------------------------------------------- */
 
 extern TIM_HandleTypeDef htim2;
 
@@ -40,7 +22,7 @@ extern TIM_HandleTypeDef htim2;
 #define MOTOR_R_IN2_PORT           MR_BWD_GPIO_Port
 #define MOTOR_R_IN2_PIN            MR_BWD_Pin
 
-/* Uncomment if your driver has a standby/sleep pin labeled MOTOR_STBY. */
+/* Uncomment if driver has a standby/sleep pin labeled MOTOR_STBY. */
 // #define MOTOR_HAS_STBY
 #ifdef MOTOR_HAS_STBY
 #define MOTOR_STBY_PORT            MOTOR_STBY_GPIO_Port
@@ -54,10 +36,6 @@ extern TIM_HandleTypeDef htim2;
 /* Speed command range: 0 = stop, 1000 = full PWM duty. */
 #define MOTOR_MAX_CMD              1000
 
-/* -------------------------------------------------------------------------- */
-/* Public function prototypes                                                  */
-/* -------------------------------------------------------------------------- */
-
 void Motors_Init(void);
 void Motors_SetSpeed(int16_t left_speed, int16_t right_speed);
 void Motors_Forward(uint16_t speed);
@@ -65,10 +43,6 @@ void Motors_Backward(uint16_t speed);
 void Motors_Stop(void);
 void Motors_Brake(void);
 void Motors_TestSequence(void);
-
-/* -------------------------------------------------------------------------- */
-/* Internal helpers                                                            */
-/* -------------------------------------------------------------------------- */
 
 static int16_t clamp_speed(int16_t speed)
 {
@@ -162,10 +136,6 @@ static void set_right_motor(int16_t speed)
   set_pwm(&MOTOR_RIGHT_PWM_TIMER, MOTOR_RIGHT_PWM_CHANNEL, duty);
 }
 
-/* -------------------------------------------------------------------------- */
-/* Public motor-control functions                                              */
-/* -------------------------------------------------------------------------- */
-
 void Motors_Init(void)
 {
 #ifdef MOTOR_HAS_STBY
@@ -211,9 +181,7 @@ void Motors_Stop(void)
 void Motors_Brake(void)
 {
   /*
-   * Active brake for common H-bridge/TB6612-style drivers:
    * IN1 = HIGH, IN2 = HIGH, PWM = HIGH.
-   * If your driver behaves differently, use Motors_Stop() instead.
    */
   HAL_GPIO_WritePin(MOTOR_L_IN1_PORT, MOTOR_L_IN1_PIN, GPIO_PIN_SET);
   HAL_GPIO_WritePin(MOTOR_L_IN2_PORT, MOTOR_L_IN2_PIN, GPIO_PIN_SET);
