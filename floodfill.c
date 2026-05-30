@@ -1,45 +1,8 @@
-/*
- * floodfill.c
- *
- *  Created on: May 24, 2026
- *      Author: anbui
- */
-/* main_converted.c
- *
- * C conversion starter for STM32CubeIDE Micromouse hardware.
- *
- * Usage in CubeMX-generated main.c:
- *
- *   1) Add this file to Core/Src or copy sections into main.c USER CODE blocks.
- *   2) Make sure measure_dist.c is also added to the build.
- *   3) In main.c, call:
- *
- *      micromouse_init();
- *
- *      inside USER CODE BEGIN 2, before while(1).
- *
- *   4) Inside while(1), call:
- *
- *      micromouse_step();
- *
- * This file intentionally does NOT use the C++ simulator API.
- */
-
 #include "main.h"
 #include "micromouse.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-
-/* -------------------------------------------------------------------------- */
-/* External IR distance function from measure_dist.c                           */
-/* -------------------------------------------------------------------------- */
-
-/* dist_t and measure_dist() are declared in micromouse.h */
-
-/* -------------------------------------------------------------------------- */
-/* User tuning values                                                          */
-/* -------------------------------------------------------------------------- */
 
 #define COMP_SIZE 16
 #define SIM_SIZE  5
@@ -54,10 +17,6 @@
 #define WALL_L_THRESHOLD   1500
 
 #define MOVE_MAX 256
-
-/* -------------------------------------------------------------------------- */
-/* Basic micromouse types                                                      */
-/* -------------------------------------------------------------------------- */
 
 typedef enum {
   NORTH = 0,
@@ -114,10 +73,6 @@ typedef struct {
   int tail;
 } CoordQueue;
 
-/* -------------------------------------------------------------------------- */
-/* Static project state                                                        */
-/* -------------------------------------------------------------------------- */
-
 static Maze maze;
 static CoordQueue q;
 
@@ -131,16 +86,11 @@ static int activeTargetCount = 0;
 static RunPhase phase = PHASE_EXPLORE_TO_GOAL;
 static int moveCount = 0;
 
-/* Public debug variables. Watch these in Live Expressions. */
 volatile uint16_t ir_R  = 0;
 volatile uint16_t ir_FR = 0;
 volatile uint16_t ir_FL = 0;
 volatile uint16_t ir_L  = 0;
 
-/* -------------------------------------------------------------------------- */
-/* Hardware movement placeholders                                              */
-/* -------------------------------------------------------------------------- */
-/* Replace these three functions with your motor driver implementation. */
 
 __weak void MM_TurnRight90(void) {
   /* TODO: add right turn motor control */
@@ -163,10 +113,6 @@ __weak void MM_MoveForwardOneCell(void) {
 
 	  Motors_Stop();
 }
-
-/* -------------------------------------------------------------------------- */
-/* Helper functions                                                            */
-/* -------------------------------------------------------------------------- */
 
 static int directionBitmask(Direction d) {
   switch (d) {
@@ -229,10 +175,6 @@ static void setWallAt(Maze* m, int x, int y, Direction d) {
     m->cellWalls[ny][nx] |= directionBitmask(opposite);
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/* Goal / phase logic                                                          */
-/* -------------------------------------------------------------------------- */
 
 static void setGoalCells(void) {
 #if MAZE_SIZE == SIM_SIZE
@@ -336,10 +278,6 @@ static void updatePhase(void) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Maze / wall / floodfill logic                                               */
-/* -------------------------------------------------------------------------- */
-
 static void initPerimeterWalls(void) {
   for (int i = 0; i < MAZE_SIZE; i++) {
     setWallAt(&maze, i, MAZE_SIZE - 1, NORTH);
@@ -427,10 +365,6 @@ static void floodFill(void) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* IR-based wall scanning                                                      */
-/* -------------------------------------------------------------------------- */
-
 static void scanWalls(void) {
   Coord p = maze.mouse_pos;
   Direction d = maze.mouse_dir;
@@ -458,10 +392,6 @@ static void scanWalls(void) {
     setWallAt(&maze, p.x, p.y, leftDir);
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/* Motion logic                                                                */
-/* -------------------------------------------------------------------------- */
 
 static void rotate(Direction desired) {
   int cur = (int)maze.mouse_dir;
@@ -535,10 +465,6 @@ static bool safeForwardMove(void) {
   updateMousePos();
   return true;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Public STM entry points                                                     */
-/* -------------------------------------------------------------------------- */
 
 void micromouse_init(void) {
   memset(&maze, 0, sizeof(maze));
