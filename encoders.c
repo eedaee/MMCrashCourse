@@ -1,45 +1,17 @@
 /*
- * encoders.c
- *
- *  Created on: May 24, 2026
- *      Author: anbui
- */
-
-/* encoder_count.c
- *
- * Basic STM32 HAL encoder-count test file for Micromouse.
- *
  * Purpose:
  *   - Start encoder timers
  *   - Poll raw encoder counts
  *   - Track signed absolute counts, including negative movement
  *   - Reset counts
  *   - Estimate wheel distance and mouse rotation angle
- *
- * How to use:
- *   1. Add this file to Core/Src in STM32CubeIDE.
- *   2. In CubeMX, configure two timers in Encoder Mode:
- *        - one timer for left encoder
- *        - one timer for right encoder
- *   3. Update the USER CONFIG section below so htim names match your project.
- *   4. Call Encoders_Init() once before while(1).
- *   5. Call Encoders_Update() repeatedly in while(1), SysTick, or a timer interrupt.
  */
 
 #include "main.h"
 #include <stdint.h>
 
-/* -------------------------------------------------------------------------- */
-/* USER CONFIG: edit these values to match your CubeMX + hardware setup         */
-/* -------------------------------------------------------------------------- */
-
-
-// Example:
-//    If left encoder uses TIM3 and right encoder uses TIM4, CubeMX creates:
       extern TIM_HandleTypeDef htim3;
        extern TIM_HandleTypeDef htim4;
-
-// * Change these to match your actual encoder timers.
 
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
@@ -47,49 +19,23 @@ extern TIM_HandleTypeDef htim4;
 #define ENC_LEFT_TIMER        htim3
 #define ENC_RIGHT_TIMER       htim4
 
-/*
- * Counts per wheel revolution depends on:
- *   encoder pulses per motor rev,
- *   quadrature mode multiplier,
- *   gear ratio.
- *
- * Start with a placeholder, then calibrate.
- */
 #define ENC_COUNTS_PER_REV    600.0f
 
 /*
- * Wheel diameter in millimeters.
- * Change this to your measured wheel diameter.
+ * Wheel diameter in millimeters
  */
 #define WHEEL_DIAMETER_MM     32.0f
 
 /*
  * Distance between left and right wheel contact points in millimeters.
- * Change this to your measured mouse track width.
  */
 #define WHEEL_BASE_MM         80.0f
 
 /*
- * If one encoder increases when you expect it to decrease, flip that side.
+ * If one encoder increases when you expect it to decrease, invert.
  */
 #define ENC_LEFT_INVERT       1
 #define ENC_RIGHT_INVERT      1
-
-/* -------------------------------------------------------------------------- */
-/* Public debug variables                                                      */
-/* -------------------------------------------------------------------------- */
-
-/*
- * Add these to Live Expressions during Debug mode:
- *   enc_left_raw
- *   enc_right_raw
- *   enc_left_total
- *   enc_right_total
- *   enc_left_mm
- *   enc_right_mm
- *   enc_center_mm
- *   enc_angle_deg
- */
 
 volatile int16_t enc_left_raw = 0;
 volatile int16_t enc_right_raw = 0;
@@ -102,16 +48,8 @@ volatile float enc_right_mm = 0.0f;
 volatile float enc_center_mm = 0.0f;
 volatile float enc_angle_deg = 0.0f;
 
-/* -------------------------------------------------------------------------- */
-/* Internal state                                                              */
-/* -------------------------------------------------------------------------- */
-
 static int16_t enc_left_prev = 0;
 static int16_t enc_right_prev = 0;
-
-/* -------------------------------------------------------------------------- */
-/* Public function prototypes                                                  */
-/* -------------------------------------------------------------------------- */
 
 void Encoders_Init(void);
 void Encoders_Update(void);
@@ -126,10 +64,6 @@ float Encoders_GetCenterDistanceMM(void);
 float Encoders_GetAngleDeg(void);
 
 void Encoders_TestPoll(void);
-
-/* -------------------------------------------------------------------------- */
-/* Internal helpers                                                            */
-/* -------------------------------------------------------------------------- */
 
 static int16_t timer_count_16(TIM_HandleTypeDef *htim)
 {
@@ -157,10 +91,7 @@ static void update_distance_values(void)
   enc_angle_deg = ((enc_right_mm - enc_left_mm) / WHEEL_BASE_MM) * 57.29578f;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Public encoder functions                                                    */
-/* -------------------------------------------------------------------------- */
-
+// public functions to call in main.c
 void Encoders_Init(void)
 {
   HAL_TIM_Encoder_Start(&ENC_LEFT_TIMER, TIM_CHANNEL_ALL);
@@ -248,10 +179,6 @@ float Encoders_GetAngleDeg(void)
 {
   return enc_angle_deg;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Simple test helper                                                          */
-/* -------------------------------------------------------------------------- */
 
 void Encoders_TestPoll(void)
 {
