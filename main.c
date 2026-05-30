@@ -203,10 +203,6 @@ uint16_t measure_dist(dist_t dist)
 }
 /* USER CODE END 0 */
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
 {
 
@@ -239,8 +235,6 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  //Motors_Init();
-  //micromouse_init();
   Motors_Init();
   Encoders_Init();
   micromouse_init();
@@ -254,13 +248,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-      //micromouse_step();
-//	dis_R  = measure_dist(DIST_R);
-//	dis_FR = measure_dist(DIST_FR);
-//	dis_L  = measure_dist(DIST_L);
-//	dis_FL = measure_dist(DIST_FL);
-//	//Encoders_Update();
-	  //micromouse_step();
+	dis_R  = measure_dist(DIST_R);
+	dis_FR = measure_dist(DIST_FR);
+	dis_L  = measure_dist(DIST_L);
+	dis_FL = measure_dist(DIST_FL);
+	Encoders_Update();
 	  Motors_SetSpeed(500,500);
 	  Motors_TestSequence();
     HAL_Delay(100);
