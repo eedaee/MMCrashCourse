@@ -255,6 +255,7 @@ int main(void)
 	Encoders_Update();
 	  Motors_SetSpeed(500,500);
 	  Motors_TestSequence();
+	  micromouse_step();
     HAL_Delay(100);
   }
   /* USER CODE END 3 */
